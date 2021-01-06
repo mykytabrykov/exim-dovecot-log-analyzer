@@ -1,26 +1,27 @@
 from location import Location
 
+
 class Event:
     def __init__(self, *args, **kwargs):
-        if "event" in kwargs:
-            kwargs = kwargs['event']
-            self.timestamp = kwargs['@timestamp']
-            self.email = kwargs['source.user.email']
-            country = kwargs['geoip']['country_name']
+        # dovecot login success case
+        if "dls" in kwargs:
+            event = kwargs['dls']
+            self.timestamp = event['@timestamp']
+            self.email = event['source.user.email']
+            self.hostname = event['host']['hostname']
+            country = event['geoip']['country_name']
             try:
-                city = kwargs['geoip']['city_name']
+                city = event['geoip']['city_name']
             except KeyError:
                 city = "null"
-            ip = kwargs['source.ip']
-            self.hostname = kwargs['host']['hostname']
+            ip = event['source.ip']
             self.location = Location(ip, country, city)
 
     def to_json(self):
-        event_json = {
+        json = {
 
         }
-        return event_json
-
+        return json
 
     def __str__(self):
         return "timestamp: " + self.timestamp + "\nemail: " + self.email + "\ncountry: " + self.country + "\ncity: " + self.city + "\nip: " + self.ip + "\nhostname: " + self.hostname

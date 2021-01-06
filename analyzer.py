@@ -1,6 +1,8 @@
 from document import Document
 from es_config import EsConfig
 from dovecot import Dovecot
+from user_manager import UserManager
+from event_manager import EventManager
 import uuid
 
 '''
@@ -29,19 +31,20 @@ import uuid
 
 class LogAnalyzer:
     def __init__(self):
-        self.es_client = EsConfig().get_es()
-        self.users = []  # list of users' documents created at runtime of this program
+        self.es_client = EsConfig().get_es_client()
+        self.user_manager = UserManager()
+        self.event_manager = EventManager()
 
     def dovecot(self):
-        dovecot = Dovecot()
-        dovecot.login_successful(self.es_client)
+        dovecot = Dovecot(self.es_client, self.user_manager, self.event_manager)
+        dovecot.login_successful() # dovecot successful login analise
 
     def control_country(self):
         logs = self.__get_logs()
         for log in logs:
             user = self.__get_user(log)
             # print("User: ", user)
-            if not user.user.check_country(log.event.location):
+            if not user.source.check_country(log.source.location):
                 print("Raise alert...")
                 self.__generate_alert(log, user)
             self.es_client.update(index=log.index, id=log.id, body={"doc": {"pyAnalyzed": "true"}})
