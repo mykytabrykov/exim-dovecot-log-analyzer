@@ -1,5 +1,5 @@
-from logAnalyzer import Dovecot
+from logAnalyzer import LogAnalyzer
 
 if __name__ == '__main__':
-    dovecot = Dovecot()
-    dovecot.control_country()
+    log_analyzer = LogAnalyzer()
+    log_analyzer.dovecot()

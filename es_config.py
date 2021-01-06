@@ -1,6 +1,5 @@
 from elasticsearch import Elasticsearch
 
-
 class EsConfig:
     def __init__(self):
         es_server = 'linoc.utixo.net'
