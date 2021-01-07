@@ -1,6 +1,7 @@
 from document import Document
+import uuid
 
-DOVECOT_USERS_INDEX = "cpanel-users"
+USERS_INDEX = "cpanel-users"
 
 
 class UserManager:
@@ -8,38 +9,52 @@ class UserManager:
     def __init__(self):
         self.users = []
 
-    def get_user(self, log):
-        for user_doc in self.users:
-            if user_doc.source.email == log.source.email and user_doc.source.hostname == log.source.hostname:
+    def get_user(self, event, es_client):
+        for user in self.users:
+            if user.document._source.email == event.document._source.source.user.email and user.document._source.hostname == event.document._source.host.hostname:
                 # print("User already exist inside runtime users' list. Return his document to caller...")
-                return user_doc
+                return user
         # user does not exist at runtime, need to be retrieved from es
         query = {
             "query": {
                 "bool": {
                     "filter": {
-                        "term": {"email.keyword": log.source.email}
+                        "term": {"email.keyword": event.document._source.source.user.email}
                     }
                 }
             }
         }
-        res = self.es_client.search(index=DOVECOT_USERS_INDEX, body=query)
+        res = es_client.search(index=USERS_INDEX, body=query)
         if res['hits']['total']['value'] != 0:  # user exist inside the index -> append and return it to caller method
-            user_doc = Document(user=res['hits']['hits'][0])
-            self.users.append(user_doc)  # append new user's document
-            return user_doc
+            user = Document(user=res['hits']['hits'][0])
+            self.users.append(user)  # append new user's document
+            return user
         else:  # user does not exist, need to be created...
             new_user_json = {
                 "_type": "_doc",
-                "_index": DOVECOT_USERS_INDEX,
+                "_index": USERS_INDEX,
                 "_id": uuid.uuid4().__str__(),
-                "_source": log.user_json_representation()
-            }
-            # print(new_user_json)
-            user_doc = Document(user=new_user_json)
-            self.users.append(user_doc)
-            return user_doc
+                "_source": {
+                    "email": event.document._source.source.user.email,
+                    "hostname": event.document._source.host.hostname,
+                    "login": {
+                        "success": {
+                            "locations": [{
+                                "ip": event.document._source.source.ip,
+                                "country": event.document._source.geoip.country_name,
+                                #"city": event.document._source.geoip.city_name,
+                                "counter": 1
+                            }
+                            ]
+                        }
+                    }
 
+                }
+            }
+            user = Document(new_user_json)
+            # print(new_user_json)
+            self.users.append(user)
+            return user
 
     def update_users(self):
         for user_doc in self.users:

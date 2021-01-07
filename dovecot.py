@@ -14,5 +14,5 @@ class Dovecot:
     def login_successful(self):
         events = self.event_manager.get_events(self.es_client, EsQueryTemplate.dovecot_login_success, DOVECOT_LOGS_INDEX)
         for event in events:
-            #user = self.user_manager.get_user(event.document._source)
-            print(event.document._source)
+            user = self.user_manager.get_user(event, self.es_client)
+            print(user)

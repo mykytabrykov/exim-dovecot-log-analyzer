@@ -1,5 +1,5 @@
 from document import Document
-from new_event import NewDocument
+from document import Document
 MAX_RESPONSE_SIZE = "10"
 
 
@@ -11,6 +11,6 @@ class EventManager:
         if res['hits']['total']['value'] != 0:  # if there are some not analyzed docs
             event_list = res['hits']['hits'].copy()
             for i in range(len(event_list)):
-                events.append(NewDocument(event_list[i]))
+                events.append(Document(event_list[i]))
                 # print("Log num.", i, event_list[i])
         return events
