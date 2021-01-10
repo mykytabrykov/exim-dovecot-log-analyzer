@@ -1,4 +1,4 @@
-from document import Document
+import serializer
 import uuid
 
 USERS_INDEX = "cpanel-users"
@@ -6,12 +6,13 @@ USERS_INDEX = "cpanel-users"
 
 class UserManager:
 
-    def __init__(self):
+    def __init__(self, es_client):
         self.users = []
+        self.es_client = es_client
 
-    def get_user(self, event, es_client):
+    def get_user(self, event):
         for user in self.users:
-            if user.document._source.email == event.document._source.source.user.email and user.document._source.hostname == event.document._source.host.hostname:
+            if user._source.email == event._source.source.user.email and user._source.hostname == event._source.host.hostname:
                 # print("User already exist inside runtime users' list. Return his document to caller...")
                 return user
         # user does not exist at runtime, need to be retrieved from es
@@ -19,14 +20,14 @@ class UserManager:
             "query": {
                 "bool": {
                     "filter": {
-                        "term": {"email.keyword": event.document._source.source.user.email}
+                        "term": {"email.keyword": event._source.source.user.email}
                     }
                 }
             }
         }
-        res = es_client.search(index=USERS_INDEX, body=query)
+        res = self.es_client.search(index=USERS_INDEX, body=query)
         if res['hits']['total']['value'] != 0:  # user exist inside the index -> append and return it to caller method
-            user = Document(user=res['hits']['hits'][0])
+            user = serializer.to_simple_namespace(res['hits']['hits'][0])
             self.users.append(user)  # append new user's document
             return user
         else:  # user does not exist, need to be created...
@@ -35,33 +36,31 @@ class UserManager:
                 "_index": USERS_INDEX,
                 "_id": uuid.uuid4().__str__(),
                 "_source": {
-                    "email": event.document._source.source.user.email,
-                    "hostname": event.document._source.host.hostname,
+                    "email": event._source.source.user.email,
+                    "hostname": event._source.host.hostname,
                     "login": {
                         "success": {
                             "locations": [{
-                                "ip": event.document._source.source.ip,
-                                "country": event.document._source.geoip.country_name,
-                                #"city": event.document._source.geoip.city_name,
-                                "counter": 1
+                                "ip": event._source.source.ip,
+                                "country": event._source.geoip.country_name,
+                                #"city": event._source.geoip.city_name,
+                                "counter": 0
                             }
                             ]
                         }
                     }
-
                 }
             }
-            user = Document(new_user_json)
+            user = serializer.to_simple_namespace(new_user_json)
             # print(new_user_json)
             self.users.append(user)
             return user
 
-    def update_users(self):
-        for user_doc in self.users:
+    def dump(self):
+        for user in self.users:
             body = {
-                "doc": user_doc.source.to_json(),
-                'doc_as_upsert': "true"
+                "doc": serializer.to_json(user._source),
+                "doc_as_upsert": "true"
             }
-            res = self.es_client.update(index=user_doc.index, id=user_doc.id, body=body)
-        # print("Update_users result: ", end="")
-        # print(res)
+            res = self.es_client.update(index=user._index, id=user._id, body=body)
+
