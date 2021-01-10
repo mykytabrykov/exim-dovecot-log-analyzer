@@ -1,5 +1,6 @@
 import json
 from types import SimpleNamespace
+import datetime
 
 data = {
     "_index": "dovecot-logs-node1-2020.10.16",
@@ -22,21 +23,9 @@ data = {
         1602852635000
     ]
 }
+import time
 
-# Parse JSON into an object with attributes corresponding to dict keys.
-#x = json.loads(json.dumps(data), object_hook=lambda d: SimpleNamespace(**d))
-#print(x)
 
-# x._source.geoip.citq = "lmao"
-
-new_user = object
-new_user.document._index = "test"
-new_user.document._id = 123
-new_user.document._type = "_doc"
-#
-rex = json.dumps(new_user, default=lambda x: x.__dict__, sort_keys=False, indent=4)
-#
-# #printable = json.dumps(x.__dict__)
-# #print(printable)
-#
-print(rex)
+date = (datetime.datetime.now() - datetime.timedelta(hours=1)).replace(microsecond=0).isoformat()
+date += ".000Z"
+print(date)

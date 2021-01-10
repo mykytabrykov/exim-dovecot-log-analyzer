@@ -1,7 +1,8 @@
 import serializer
 import uuid
+import datetime
 
-USERS_INDEX = "cpanel-users"
+USERS_INDEX = "users-cpanel"
 
 
 class UserManager:
@@ -36,16 +37,16 @@ class UserManager:
                 "_index": USERS_INDEX,
                 "_id": uuid.uuid4().__str__(),
                 "_source": {
+                    "last_update": datetime.datetime.now().isoformat(),
                     "email": event._source.source.user.email,
                     "hostname": event._source.host.hostname,
                     "login": {
                         "success": {
-                            "locations": [{
-                                "ip": event._source.source.ip,
-                                "country": event._source.geoip.country_name,
-                                #"city": event._source.geoip.city_name,
-                                "counter": 0
-                            }
+                            "locations": [
+                            ]
+                        },
+                        "failure": {
+                            "locations": [
                             ]
                         }
                     }
@@ -58,6 +59,9 @@ class UserManager:
 
     def dump(self):
         for user in self.users:
+            timestamp = (datetime.datetime.now() - datetime.timedelta(hours=1)).replace(microsecond=0).isoformat()
+            timestamp += ".000Z"
+            user._source.last_update = timestamp
             body = {
                 "doc": serializer.to_json(user._source),
                 "doc_as_upsert": "true"

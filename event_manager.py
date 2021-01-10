@@ -18,6 +18,20 @@ class EventManager:
                 # print("Log num.", i, event_list[i])
         return self.events
 
-    def update(self):
+    def update_and_flush(self):
+        self.__update()
+        self.__flush()
+
+    def __update(self):
         for event in self.events:
-            self.es_client.update(index=event._index, id=event._id, body={"doc": {"pyAnalyzed": "true"}})
+            body = {
+                "doc": {
+                    "python": {
+                        "analyzed": "true"
+                    }
+                }
+            }
+            self.es_client.update(index=event._index, id=event._id, body=body)
+
+    def __flush(self):
+        self.events.clear()
