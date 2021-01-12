@@ -2,11 +2,10 @@ import serializer
 
 
 class EventManager:
-    def __init__(self, es_client, user_index, max_response_size):
+    def __init__(self, es_client, max_response_size):
         self.events = []
         self.es_client = es_client
         self.max_response_size = max_response_size
-        self.user_index = user_index
 
     def get_events(self, query, index):
         res = self.es_client.search(index=index, body=query, size=self.max_response_size)
@@ -17,6 +16,7 @@ class EventManager:
                 self.events.append(serializer.to_simple_namespace(event_list[i]))
                 # print("Log num.", i, event_list[i])
         return self.events
+
 
     def update_and_flush(self):
         self.__update()

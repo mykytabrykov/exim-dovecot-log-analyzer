@@ -49,6 +49,20 @@ class UserManager:
                             "locations": [
                             ]
                         }
+                    },
+                    "exim": {
+                        "emails": {
+                            "sent": {
+                                "total": 0
+                            }
+                        },
+                        "login": {
+                            "failure": {
+                                "locations": [
+
+                                ]
+                            }
+                        }
                     }
                 }
             }
@@ -58,6 +72,7 @@ class UserManager:
             return user
 
     def dump(self):
+
         for user in self.users:
             timestamp = (datetime.datetime.now() - datetime.timedelta(hours=1)).replace(microsecond=0).isoformat()
             timestamp += ".000Z"
