@@ -60,5 +60,3 @@ class Exim:
                 print("")
                 print(event_id)
             print("====End=====")
-
-    def day_rate(self):
