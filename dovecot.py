@@ -38,7 +38,7 @@ class Dovecot:
                         "ip": event._source.source.ip,
                         "country": event._source.geoip.country_name,
                         "counter": 1,
-                        "last_occurrence": event._source.event.timestamp
+                        "last_occurrence": event._source.preprocessor.timestamp
                     })
                 )
                 if not same_country and len(user._source.login.success.locations) > 1:
@@ -62,7 +62,7 @@ class Dovecot:
                             "ip": event._source.source.ip,
                             "country": event._source.geoip.country_name,
                             "counter": 1,
-                            "last_occurrence": event._source.event.timestamp
+                            "last_occurrence": event._source.preprocessor.timestamp
 
                         })
                     )
@@ -73,7 +73,7 @@ class Dovecot:
                             "ip": event._source.source.ip,
                             "country": "null",
                             "counter": 1,
-                            "last_occurrence": event._source.event.timestamp
+                            "last_occurrence": event._source.preprocessor.timestamp
 
                         })
                     )

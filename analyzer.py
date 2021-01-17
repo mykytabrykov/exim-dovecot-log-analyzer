@@ -3,11 +3,13 @@ from dovecot import Dovecot
 from exim import Exim
 from user_manager import UserManager
 from event_manager import EventManager
+from elasticsearch_dsl import connections
 
 
 class LogAnalyzer:
     def __init__(self):
         self.es_client = EsConfig().get_es_client()
+        connections.add_connection(conn=self.es_client, alias="default")
 
     def dovecot(self):
         event_max_response_size = 100

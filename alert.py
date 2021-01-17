@@ -5,7 +5,7 @@ def generate_alert(alert_type, event, user, es_client):
     if alert_type == "dovecot-login-from-another-country":
         # logging.warning("WARNING")
         alert_body = {
-            "event.timestamp": event._source.event.timestamp,
+            "event.timestamp": event._source.preprocessor.timestamp,
             "user.email": user._source.email,
             "user.country.new": event._source.geoip.country_name,
             # "user.city.new": log.source.location.city,
