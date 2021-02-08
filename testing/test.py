@@ -1,13 +1,6 @@
-import json
-from types import SimpleNamespace
-from datetime import datetime
-from elasticsearch import Elasticsearch
-from elasticsearch_dsl import Search, A, connections, Document, Q, Date
+from elasticsearch_dsl import Search
 from elasticsearch_dsl import connections
 import statistics
-import serializer
-import time
-from es_query_template import EsQueryTemplate
 
 from es_client import EsClient
 
