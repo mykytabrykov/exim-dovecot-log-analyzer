@@ -9,10 +9,10 @@ import serializer
 import time
 from es_query_template import EsQueryTemplate
 
-from es_config import EsConfig
+from es_client import EsClient
 
 
-es_client = EsConfig().get_es_client()
+es_client = EsClient().get_es_client()
 
 connections.add_connection(conn=es_client, alias="default")
 

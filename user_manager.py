@@ -1,53 +1,77 @@
 import serializer
 import uuid
 import datetime
-
+from elasticsearch_dsl import Search, connections
+import configparser
+import os
+from es_client import EsClient
+from pytz import timezone
+import time
 USERS_INDEX = "users-cpanel"
 
 
 class UserManager:
 
-    def __init__(self, es_client):
+    def __init__(self, service):
+        self.config = configparser.ConfigParser()
+        self.config.read(os.path.join(os.path.dirname(__file__), 'config', 'config.ini'))
+        self.es_client = EsClient().connect()
+        connections.add_connection(conn=self.es_client, alias="user_manager")
         self.users = []
-        self.es_client = es_client
+        self.service = service
 
-    def get_user(self, event):
+    def get_user(self, email):
         for user in self.users:
-            if user._source.email == event._source.source.user.email and user._source.hostname == event._source.host.hostname:
+            if user.email == email:
                 # print("User already exist inside runtime users' list. Return his document to caller...")
                 return user
-        # user does not exist at runtime, need to be retrieved from es
-        query = {
-            "query": {
-                "bool": {
-                    "filter": {
-                        "term": {"email.keyword": event._source.source.user.email}
-                    }
-                }
-            }
-        }
-        res = self.es_client.search(index=USERS_INDEX, body=query)
-        if res['hits']['total']['value'] != 0:  # user exist inside the index -> append and return it to caller method
-            user = serializer.to_simple_namespace(res['hits']['hits'][0])
-            self.users.append(user)  # append new user's document
+        # user does not exist at runtime, need to be retrieved from elasticsearch
+        s = Search(index=self.config['users']['index'], using='user_manager') \
+            .filter('term', email__keyword=email)
+        #print(s.to_dict())
+        response = s.execute()
+        for user in response:
+            self.users.append(user)
             return user
-        else:  # user does not exist, need to be created...
+
+        return None
+
+
+
+
+    def create_user(self, email):
+        s = Search()
+        if self.service == 'dovecot':
+            s = Search(index=self.config['dovecot']['index'], using='user_manager') \
+                .exclude("terms", source__ip=["127.0.0.1", "::1"]) \
+                .filter('term', python__analyzed__keyword='false') \
+                .filter('term', event__action__keyword='login') \
+                .filter('term', event__outcome__keyword='success') \
+                .filter('term', source__user__email__keyword=email) \
+                .query("exists", field="geoip.country_name") \
+                .sort('@timestamp')
+            s = s[0:1]
+
+        print(s.to_dict())
+        response = s.execute()
+        for event in response:
             new_user_json = {
-                "_type": "_doc",
-                "_index": USERS_INDEX,
+                "_type": "user",
+                "_index": self.config['users']['index'],
                 "_id": uuid.uuid4().__str__(),
                 "_source": {
-                    "last_update": datetime.datetime.now().isoformat(),
-                    "email": event._source.source.user.email,
-                    "hostname": event._source.host.hostname,
-                    "login": {
-                        "success": {
-                            "locations": [
-                            ]
-                        },
-                        "failure": {
-                            "locations": [
-                            ]
+                    "last_update": datetime.datetime.now(timezone('UTC')).isoformat(),
+                    "email": event.source.user.email,
+                    "hostname": event.host.name,
+                    "score": 0.0001,
+                    "dovecot": {
+                        "login": {
+                            "success": {
+                                "locations": []
+                            },
+                            "failure": {
+                                "locations": []
+                            }
                         }
                     },
                     "exim": {
@@ -58,28 +82,26 @@ class UserManager:
                         },
                         "login": {
                             "failure": {
-                                "locations": [
-
-                                ]
+                                "locations": []
                             }
                         }
                     }
                 }
             }
-            user = serializer.to_simple_namespace(new_user_json)
-            # print(new_user_json)
-            self.users.append(user)
-            return user
+            res = self.es_client.index(index=new_user_json['_index'], id=new_user_json['_id'], body=new_user_json['_source'])
+            # time need to ingestion by Elasticsearch
+            time.sleep(1)
+            return res
 
-    def dump(self):
-
+    def update_users(self):
         for user in self.users:
-            timestamp = (datetime.datetime.now() - datetime.timedelta(hours=1)).replace(microsecond=0).isoformat()
-            timestamp += ".000Z"
-            user._source.last_update = timestamp
+            user.last_update = datetime.datetime.now(timezone('UTC')).isoformat()
+            user_dict = user.to_dict()
+            print(user_dict)
             body = {
-                "doc": serializer.to_json(user._source),
+                "doc": serializer.to_json(user_dict),
                 "doc_as_upsert": "true"
             }
-            res = self.es_client.update(index=user._index, id=user._id, body=body)
+            self.es_client.update(index=user.meta.index, id=user.meta.id, body=body)
+            self.users = []
 

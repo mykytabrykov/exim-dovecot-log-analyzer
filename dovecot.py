@@ -1,79 +1,97 @@
 from es_query_template import EsQueryTemplate
 from event_manager import EventManager
+from score_system import ScoreSystem
 from user_manager import UserManager
 from elasticsearch import Elasticsearch
 import serializer
-import alert
-
-DOVECOT_LOGS_INDEX = "dovecot*"
+import alert_system
 
 
 class Dovecot:
-    def __init__(self, es_client: Elasticsearch, user_manager: UserManager, event_manager: EventManager):
-        self.es_client = es_client
-        self.event_manager = event_manager
-        self.user_manager = user_manager
+    def __init__(self):
+        self.event_manager = EventManager("dovecot")
+        self.user_manager = UserManager("dovecot")
+        self.score_system = ScoreSystem("dovecot")
+        # scoresystem
 
-    def login_successful(self):
-        events = self.event_manager.get_events(EsQueryTemplate.dovecot_login_success,
-                                               DOVECOT_LOGS_INDEX)
-        for event in events:
-            user = self.user_manager.get_user(event)
-            same_ip = False
-            same_country = False
-            for location in user._source.login.success.locations:
-                try:
-                    if location.ip == event._source.source.ip:
-                        same_ip = True
-                    if location.country == event._source.geoip.country_name:
-                        same_country = True
-                    if location.ip == event._source.source.ip and location.country == event._source.geoip.country_name:
-                        location.counter += 1
-                        break
-                except AttributeError:
-                    print("An AttributeError has occured | location data is: ", location)
-            if not same_ip:
-                user._source.login.success.locations.append(serializer.to_simple_namespace(
-                    {
-                        "ip": event._source.source.ip,
-                        "country": event._source.geoip.country_name,
-                        "counter": 1,
-                        "last_occurrence": event._source.preprocessor.timestamp
+    def suspicious_login(self):
+        events = self.event_manager.get_events('login-successful')
+
+        for email in events.aggregations.emails.buckets:
+            user = self.user_manager.get_user(email.key)
+            if user is None:
+                resp = self.user_manager.create_user(email.key)
+                if resp['result'] != 'created':
+                    raise Exception
+                user = self.user_manager.get_user(email.key)
+            if len(user.dovecot.login.success.locations) == 0:
+                for region in email.by_region.buckets:
+                    user.dovecot.login.success.locations.append({
+                        "region": region.key,
+                        "counter": region.doc_count,
+                        "alert": "no"
                     })
-                )
-                if not same_country and len(user._source.login.success.locations) > 1:
-                    alert.generate_alert("dovecot-login-from-another-country", event, user, self.es_client)
-
-    def login_failed(self):
-        events = self.event_manager.get_events(EsQueryTemplate.dovecot_login_failed,
-                                               DOVECOT_LOGS_INDEX)
-        for event in events:
-            user = self.user_manager.get_user(event)
-            same_ip = False
-            for location in user._source.login.failure.locations:
-                if location.ip == event._source.source.ip:
-                    same_ip = True
-                    location.counter += 1
-                    break
-            if not same_ip:
-                try:
-                    user._source.login.failure.locations.append(serializer.to_simple_namespace(
-                        {
-                            "ip": event._source.source.ip,
-                            "country": event._source.geoip.country_name,
-                            "counter": 1,
-                            "last_occurrence": event._source.preprocessor.timestamp
-
+            else:
+                print('hey')
+                for region in email.by_region.buckets:
+                    for location in user.dovecot.login.success.locations:
+                        if location.region == region.key:
+                            print("before:", region.doc_count)
+                            location.counter += region.doc_count
+                            region.doc_count = 0
+                            print("after:", region.doc_count)
+                        break
+                    if region.doc_count != 0:
+                        self.score_system.evaluate_risk("new-region", user, region)
+                        user.dovecot.login.success.locations.append({
+                            "region": region.key,
+                            "counter": region.doc_count,
+                            "alert": "yes"
                         })
-                    )
-                except AttributeError:
-                    print("Dovecot | Login Failed Error: event: ", event)
-                    user._source.login.failure.locations.append(serializer.to_simple_namespace(
-                        {
-                            "ip": event._source.source.ip,
-                            "country": "null",
-                            "counter": 1,
-                            "last_occurrence": event._source.preprocessor.timestamp
 
-                        })
-                    )
+        self.user_manager.update_users()
+        self.event_manager.update_events(events, "login-successful")
+
+    def brute_force(self):
+        events = self.event_manager.get_events('login-failed')
+        for email in events.aggregations.emails.buckets:
+            user = self.user_manager.get_user(email.key)
+            if user is not None:
+                for region in email.by_region.buckets:
+                    print('login-failed-alert')
+                    self.score_system.evaluate_risk('login-failed', user, region)
+
+        self.user_manager.update_users()
+        self.event_manager.update_events(events, "login-failure")
+# events = self.event_manager.get_events(EsQueryTemplate.dovecot_login_failed,
+#                                        DOVECOT_LOGS_INDEX)
+# for event in events:
+#     user = self.user_manager.get_user(event)
+#     same_ip = False
+#     for location in user._source.login.failure.locations:
+#         if location.ip == event._source.source.ip:
+#             same_ip = True
+#             location.counter += 1
+#             break
+#     if not same_ip:
+#         try:
+#             user._source.login.failure.locations.append(serializer.to_simple_namespace(
+#                 {
+#                     "ip": event._source.source.ip,
+#                     "country": event._source.geoip.country_name,
+#                     "counter": 1,
+#                     "last_occurrence": event._source.preprocessor.timestamp
+#
+#                 })
+#             )
+#         except AttributeError:
+#             print("Dovecot | Login Failed Error: event: ", event)
+#             user._source.login.failure.locations.append(serializer.to_simple_namespace(
+#                 {
+#                     "ip": event._source.source.ip,
+#                     "country": "null",
+#                     "counter": 1,
+#                     "last_occurrence": event._source.preprocessor.timestamp
+#
+#                 })
+#             )
