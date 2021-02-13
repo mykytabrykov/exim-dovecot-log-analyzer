@@ -1,23 +1,21 @@
+import configparser, logging, os
 from score_system import ScoreSystem
-from user_manager import UserManager
+from user import User
 from elasticsearch_dsl import Search, connections, UpdateByQuery
-import configparser
-import os
 from es_client import EsClient
 
 
 class Dovecot:
     def __init__(self):
-        self.user_manager = UserManager()
-        self.score_system = ScoreSystem()
-
         self.config = configparser.ConfigParser()
-        self.config.read(os.path.join(os.path.dirname(__file__), 'config', 'config.ini'))
-        # create default elasticsearch dsl connection
+        self.config.read(os.path.join(os.path.dirname(__file__), 'config.ini'))
+        # create default elasticsearch dsl connection for dovecot
         connections.add_connection(conn=EsClient().connect(), alias="dovecot")
 
+        self.score_system = ScoreSystem()
 
     def suspicious_login(self):
+
         # select
         query = Search(using='dovecot', index=self.config['dovecot']['index']) \
             .exclude("terms", source__ip=["127.0.0.1", "::1"]) \
@@ -36,30 +34,21 @@ class Dovecot:
         events = query.execute()
 
         for email in events.aggregations.emails.buckets:
-            user = self.user_manager.get_user(email.key)
-            if user is None:
-                user = self.user_manager.create_empty_user(email.key)
-                for region in email.by_region.buckets:
-                    user.dovecot.login.success.locations.append({
+            user = User(email.key)
+            for region in email.by_region.buckets:
+                for location in user.profile.dovecot.login.success.locations:
+                    if location.region == region.key:
+                        location.counter += region.doc_count
+                        region.doc_count = 0
+                if region.doc_count != 0:
+                    self.score_system.evaluate_risk("dovecot-new-region", user, region)
+                    user.profile.dovecot.login.success.locations.append({
                         "region": region.key,
                         "counter": region.doc_count,
-                        "alert": "no"
+                        "new": "yes"
                     })
-            else:
-                for region in email.by_region.buckets:
-                    for location in user.dovecot.login.success.locations:
-                        if location.region == region.key:
-                            location.counter += region.doc_count
-                            region.doc_count = 0
-                    if region.doc_count != 0:
-                        self.score_system.evaluate_risk("dovecot-new-region", user, region)
-                        user.dovecot.login.success.locations.append({
-                            "region": region.key,
-                            "counter": region.doc_count,
-                            "alert": "yes"
-                        })
+            user.update()
 
-        self.user_manager.update_users()
 
         # mark events as already checked
         for email in events.aggregations.emails.buckets:
@@ -75,7 +64,8 @@ class Dovecot:
             ubq.execute()
 
     def brute_force(self):
-        query = Search(using='dovecot', index=self.config['dovecot']['index'] ) \
+        logging.info('Entering suspicious_login method')
+        query = Search(using='dovecot', index=self.config['dovecot']['index']) \
             .exclude("terms", source__ip=["127.0.0.1", "::1"]) \
             .filter('term', python__analyzed__keyword='false') \
             .filter('term', event__action__keyword='login') \
@@ -89,13 +79,13 @@ class Dovecot:
         events = query.execute()
 
         for email in events.aggregations.emails.buckets:
-            user = self.user_manager.get_user(email.key)
+            user = User(email.key)
             if user is not None:
                 for region in email.by_region.buckets:
                     print('login-failed-alert')
                     self.score_system.evaluate_risk('dovecot-login-failed', user, region)
 
-        self.user_manager.update_users()
+        self.user_manager.update()
         for email in events.aggregations.emails.buckets:
             ubq = UpdateByQuery(using='dovecot', index=self.config['dovecot']['index']) \
                 .script(source="ctx._source.python.analyzed = true") \
@@ -107,4 +97,3 @@ class Dovecot:
                 .query("exists", field="geoip.country_name")
             # print(ubq.to_dict())
             ubq.execute()
-

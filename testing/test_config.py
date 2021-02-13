@@ -1,13 +1,11 @@
 import configparser
-import os
 
-config = configparser.ConfigParser()
+from user import User
 
-config.read(os.path.join(os.path.dirname(__file__), 'config.ini'))
+user = User('j.shaw@utixo.co.uk')
 
-print(config.sections())
-print(config['dovecot']['index'])
+print(user.profile.score)
 
-es_config = config['elasticsearch']
-
-print(es_config.getboolean('ssl'))
+user.profile.score = 2
+print(user.profile.score)
+user.update()

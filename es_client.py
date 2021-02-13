@@ -7,7 +7,7 @@ from elasticsearch_dsl import connections
 class EsClient:
     def __init__(self):
         config = configparser.ConfigParser()
-        config.read(os.path.join(os.path.dirname(__file__), 'config', 'config.ini'))
+        config.read(os.path.join(os.path.dirname(__file__),'config.ini'))
         es_config = config['elasticsearch']
 
         self.server = es_config['server']

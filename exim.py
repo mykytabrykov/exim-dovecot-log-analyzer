@@ -1,4 +1,4 @@
-from user_manager import UserManager
+from user import User
 from score_system import ScoreSystem
 from es_client import EsClient
 import statistics
@@ -13,11 +13,10 @@ EXIM_LOGS_INDEX = "exim*"
 
 class Exim:
     def __init__(self):
-        self.user_manager = UserManager()
         self.score_system = ScoreSystem()
 
         self.__config = configparser.ConfigParser()
-        self.__config.read(os.path.join(os.path.dirname(__file__), 'config', 'config.ini'))
+        self.__config.read(os.path.join(os.path.dirname(__file__), 'config.ini'))
         self.__config = self.__config['exim']
 
         connections.add_connection(conn=EsClient().connect(), alias="exim")
@@ -48,7 +47,7 @@ class Exim:
                 user.exim.emails.sent.daily.append(day.doc_count)
 
 
-        self.user_manager.update_users()
+        self.user_manager.update()
         for email in events.aggregations.emails.buckets:
             ubq = UpdateByQuery(using='exim', index=self.__config['index']) \
                 .script(source="ctx._source.python.analyzed = true") \
@@ -84,7 +83,7 @@ class Exim:
                 for region in email.by_region.buckets:
                     self.score_system.evaluate_risk('exim-login-failed', user, region)
 
-        self.user_manager.update_users()
+        self.user_manager.update()
         for email in events.aggregations.emails.buckets:
             ubq = UpdateByQuery(using='exim', index=self.__config['index']) \
                 .script(source="ctx._source.python.analyzed = true") \

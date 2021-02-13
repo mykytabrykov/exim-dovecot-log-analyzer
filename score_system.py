@@ -7,7 +7,7 @@ import statistics
 class ScoreSystem:
     def __init__(self):
         self.__config = configparser.ConfigParser()
-        self.__config.read(os.path.join(os.path.dirname(__file__), 'config', 'config.ini'))
+        self.__config.read(os.path.join(os.path.dirname(__file__), 'config.ini'))
 
         self.__config = self.__config['score']
         self.__action_system = ActionSystem()
