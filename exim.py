@@ -36,18 +36,16 @@ class Exim:
         events = query.execute()
 
         for email in events.aggregations.emails.buckets:
-            user = self.user_manager.get_user(email.key)
+            user = User(email.key).get_user()
             if user is None:
-                user = self.user_manager.create_empty_user(email.key)
-
+                user = User(email.key).create_empty_user()
             for day in email.per_day.buckets:
-                print(user.to_dict())
-                if len(user.exim.emails.sent.daily) > int(self.__config['learning_days']):
+                print(user.profile.to_dict())
+                if len(user.profile.exim.emails.sent.daily) > int(self.__config['learning_days']):
                     self.score_system.evaluate_risk('exim-sending-rate', user, day.doc_count)
-                user.exim.emails.sent.daily.append(day.doc_count)
+                user.profile.exim.emails.sent.daily.append(day.doc_count)
+            user.update()
 
-
-        self.user_manager.update()
         for email in events.aggregations.emails.buckets:
             ubq = UpdateByQuery(using='exim', index=self.__config['index']) \
                 .script(source="ctx._source.python.analyzed = true") \
@@ -58,9 +56,6 @@ class Exim:
                 .filter('term', source__user__email__keyword=email.key) \
                 .query("exists", field="geoip.country_name")
             ubq.execute()
-
-
-
 
     def brute_force(self):
         query = Search(using='exim', index=self.__config['index']) \
@@ -78,12 +73,12 @@ class Exim:
         events = query.execute()
 
         for email in events.aggregations.emails.buckets:
-            user = self.user_manager.get_user(email.key)
+            user = user = User(email.key).get_user()
             if user is not None:
                 for region in email.by_region.buckets:
                     self.score_system.evaluate_risk('exim-login-failed', user, region)
+                user.update()
 
-        self.user_manager.update()
         for email in events.aggregations.emails.buckets:
             ubq = UpdateByQuery(using='exim', index=self.__config['index']) \
                 .script(source="ctx._source.python.analyzed = true") \

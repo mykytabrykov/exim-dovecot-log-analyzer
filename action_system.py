@@ -2,14 +2,12 @@ import os
 import configparser
 from es_client import EsClient
 
-ALERTS_INDEX = "alerts"
-
 
 class ActionSystem:
     def __init__(self, ):
-        self.config = configparser.ConfigParser()
-        self.config.read(os.path.join(os.path.dirname(__file__), 'config', 'config.ini'))
-        self.es_client = EsClient().connect()
+        self.__config = configparser.ConfigParser()
+        self.__config.read(os.path.join(os.path.dirname(__file__), 'config.ini'))
+        self.__es_client = EsClient().connect()
 
     def generate_alert(self, alert_type, user, options):
         alert_body = {}
@@ -17,10 +15,10 @@ class ActionSystem:
             # logging.warning("WARNING")
             alert_body = {
                 # "event.timestamp": event._source.preprocessor.timestamp,
-                "user.email": user.email,
+                "user.email": user.profile.email,
                 "user.country.new": options.key,
                 # "user.ip.new": event._source.source.ip,
-                "host.hostname": user.hostname,
+                "host.hostname": user.profile.hostname,
                 "event.reason": "Utente si è collegato da un altro paese",
                 "event.kind": "alert",
                 "event.category": "email",
@@ -32,15 +30,15 @@ class ActionSystem:
             # logging.warning("WARNING")
             alert_body = {
                 # "event.timestamp": event._source.preprocessor.timestamp,
-                "user.email": user.email,
+                "user.email": user.profile.email,
                 "exim.email.quantity": options,
                 # "user.ip.new": event._source.source.ip,
-                "host.hostname": user.hostname,
+                "host.hostname": user.profile.hostname,
                 "event.kind": "alert",
                 "event.category": "email",
                 "event.type": "sending",
                 "event.outcome": "success",
-                "event.reason": "Utente spedisce più e-mail del solito",
+                "event.reason": "User sends too much e-mails...",
             }
             # indexing new alert
-        self.es_client.index(index=ALERTS_INDEX, body=alert_body)
+        self.__es_client.index(index=self.__config['alerts']['index'], body=alert_body)

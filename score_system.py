@@ -21,16 +21,16 @@ class ScoreSystem:
         if revealed_event == 'exim-sending-rate':
             print("New day ", options)
             new_day = options
-            variance = statistics.variance(user.exim.emails.sent.daily)
-            standard_deviation = statistics.stdev(user.exim.emails.sent.daily)
-            mean = statistics.mean(user.exim.emails.sent.daily)
-            rsd = statistics.stdev(user.exim.emails.sent.daily) / statistics.mean(user.exim.emails.sent.daily)
+            variance = statistics.variance(user.profile.exim.emails.sent.daily)
+            standard_deviation = statistics.stdev(user.profile.exim.emails.sent.daily)
+            mean = statistics.mean(user.profile.exim.emails.sent.daily)
+            rsd = statistics.stdev(user.profile.exim.emails.sent.daily) / statistics.mean(user.profile.exim.emails.sent.daily)
 
-            print("Daily Variance:", statistics.variance(user.exim.emails.sent.daily))
-            print("Daily Deviation:", statistics.stdev(user.exim.emails.sent.daily))
-            print("Daily Mean: ", statistics.mean(user.exim.emails.sent.daily))
+            print("Daily Variance:", statistics.variance(user.profile.exim.emails.sent.daily))
+            print("Daily Deviation:", statistics.stdev(user.profile.exim.emails.sent.daily))
+            print("Daily Mean: ", statistics.mean(user.profile.exim.emails.sent.daily))
             print("Day RSD: ",
-               statistics.stdev(user.exim.emails.sent.daily) / statistics.mean(user.exim.emails.sent.daily))
+               statistics.stdev(user.profile.exim.emails.sent.daily) / statistics.mean(user.profile.exim.emails.sent.daily))
 
             try:
                 score_increment += (new_day - mean) / standard_deviation
@@ -41,9 +41,9 @@ class ScoreSystem:
         if revealed_event == 'exim-login-failed':
             score_increment += options.doc_count / 1000
 
-        user.score += score_increment
+        user.profile.score += score_increment
 
-        if user.score >= self.__config.getint('level_1'):
+        if user.profile.score >= self.__config.getint('level_1'):
             self.__action_system.generate_alert(revealed_event, user, options)
-        if user.score >= self.__config.getint('level_2'):
+        if user.profile.score >= self.__config.getint('level_2'):
             devolpment = 'in corso'

@@ -11,23 +11,24 @@ class User:
 
         self.__es_client = EsClient().connect()
         connections.add_connection(conn=self.__es_client, alias="user")
+        self.email = email
+        self.profile = None
 
-        self.profile = self.get_user(email)
-
-    def get_user(self,email):
+    def get_user(self):
         s = Search(index=self.__config['users']['index'], using='user') \
-            .filter('term', email__keyword=email)
+            .filter('term', email__keyword=self.email)
 
         response = s.execute()
 
         if len(response) > 0:
             for user in response:
-                return user
-        else:
-            return self.create_empty_user()
+                self.profile = user
+                return self
+        return None
 
-    def create_empty_user(self, email):
-        email = email
+
+    def create_empty_user(self):
+        email = self.email
         hostname = 'none'
         score = 0.0001
         last_update = datetime.datetime.now(timezone('UTC')).isoformat()
@@ -65,11 +66,12 @@ class User:
             "dovecot": dovecot,
             "exim": exim,
         }
+        print(new_user_body)
         res = self.__es_client.index(index=self.__config['users']['index'], id=uuid.uuid4().__str__(),
                                      body=new_user_body)
         # time needed by Elasticsearch ingestion
         time.sleep(1)
-        return self.get_user(email)
+        return self.get_user()
 
     def update(self):
         self.profile.last_update = datetime.datetime.now(timezone('UTC')).isoformat()
@@ -84,6 +86,5 @@ class User:
         print(result)
         if result['result'] == 'updated':
             logging.warning('User profile (' + self.profile.email + ') was successfully updated')
-            print('hey')
         else:
             logging.error('Occurred error during user profile (', self.profile.email, ') update')

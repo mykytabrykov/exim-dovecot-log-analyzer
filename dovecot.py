@@ -15,7 +15,6 @@ class Dovecot:
         self.score_system = ScoreSystem()
 
     def suspicious_login(self):
-
         # select
         query = Search(using='dovecot', index=self.config['dovecot']['index']) \
             .exclude("terms", source__ip=["127.0.0.1", "::1"]) \
@@ -34,19 +33,28 @@ class Dovecot:
         events = query.execute()
 
         for email in events.aggregations.emails.buckets:
-            user = User(email.key)
-            for region in email.by_region.buckets:
-                for location in user.profile.dovecot.login.success.locations:
-                    if location.region == region.key:
-                        location.counter += region.doc_count
-                        region.doc_count = 0
-                if region.doc_count != 0:
-                    self.score_system.evaluate_risk("dovecot-new-region", user, region)
+            user = User(email.key).get_user()
+            if user is None:
+                user = User(email.key).create_empty_user()
+                for region in email.by_region.buckets:
                     user.profile.dovecot.login.success.locations.append({
                         "region": region.key,
                         "counter": region.doc_count,
-                        "new": "yes"
+                        "new": "no"
                     })
+            else:
+                for region in email.by_region.buckets:
+                    for location in user.profile.dovecot.login.success.locations:
+                        if location.region == region.key:
+                            location.counter += region.doc_count
+                            region.doc_count = 0
+                    if region.doc_count != 0:
+                        self.score_system.evaluate_risk("dovecot-new-region", user, region)
+                        user.profile.dovecot.login.success.locations.append({
+                            "region": region.key,
+                            "counter": region.doc_count,
+                            "new": "yes"
+                        })
             user.update()
 
 
@@ -79,13 +87,14 @@ class Dovecot:
         events = query.execute()
 
         for email in events.aggregations.emails.buckets:
-            user = User(email.key)
+            user = User(email.key).get_user()
             if user is not None:
                 for region in email.by_region.buckets:
                     print('login-failed-alert')
                     self.score_system.evaluate_risk('dovecot-login-failed', user, region)
+            user.update()
 
-        self.user_manager.update()
+
         for email in events.aggregations.emails.buckets:
             ubq = UpdateByQuery(using='dovecot', index=self.config['dovecot']['index']) \
                 .script(source="ctx._source.python.analyzed = true") \
